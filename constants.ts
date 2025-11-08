@@ -45,7 +45,7 @@ Create a clean, professional scene illustration that captures the environment de
 - The scene should be immersive and detailed, but **compositionally balanced to allow space for characters to be added later** (e.g., open foreground, clear pathways).
 - **CRITICAL: The image must be completely free of any visible signage, text, written words, watermarks, logos, or captions.**
 - **CRITICAL: Do not include any people, characters, or creatures in the scene.**
-- The perspective, lighting, and color tone must be clear and consistent.
+- The perspective, a lighting, and color tone must be clear and consistent.
 
 **Negative Prompt (Things to strictly avoid):**
 Text, words, signs, watermarks, logos, UI elements, captions, people, characters, animals, blurry or chaotic backgrounds, inconsistent lighting, or flat perspective.
@@ -77,16 +77,21 @@ Ensure that every character, location, and scene adheres visually to this chosen
 
 ---
 
-### **Character & Environment Reference & Consistency Mandate**
+### **Character & Environment Reference & Integration Mandate**
 {{character_references_section}}
 {{location_references_section}}
 
-**Source of Truth:** The provided reference images for characters and locations are the **single source of truth**.
+**Source of Truth & Integration:** The provided reference images are the source of truth for **visual design**, and the Scene Description is the source of truth for **action and composition**. You must integrate them seamlessly.
 
-**Character Consistency Mandate:**
-- You **MUST** render characters exactly as they appear in their reference sheets.
-- If the \`scene_description\` seems to contradict a character's appearance (e.g., describes "a young boy" but the reference sheet shows an adult man), **THE REFERENCE SHEET IS ALWAYS CORRECT**. You must ignore the conflicting part of the description and draw the character from the reference sheet performing the described action.
-- Maintain perfect continuity with the character’s existing design (clothes, hair, body proportions, etc.) and the location’s structure, lighting, and perspective.
+**Visual Consistency Mandate:**
+- Use the reference sheets to understand the character's **visual design (clothing, hair, colors, face)** and the location's **architecture and mood**.
+- If the \`scene_description\` seems to contradict a character's core appearance (e.g., describes "a character with a red shirt" but the reference sheet shows a blue shirt), **THE REFERENCE SHEET IS ALWAYS CORRECT** for visual design.
+- The reference sheets define **WHAT** the character and location look like.
+
+**Composition & Action Mandate:**
+- The \`Scene Description\` defines **HOW** the character should be posed, positioned, and interacting with the environment in this specific panel.
+- **DO NOT** simply copy static poses from the character reference sheet. Your primary task is to create a new, dynamic, and believable pose that matches the action described (e.g., "walking," "running," "looking surprised").
+- The character must look fully integrated into the location, with correct perspective, lighting, and shadows. Avoid a "pasted on" or "cutout" look.
 
 ---
 
