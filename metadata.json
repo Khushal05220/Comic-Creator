@@ -1,0 +1,5 @@
+{
+  "name": "Comics Creators",
+  "description": "An AI-powered platform to design, write, and generate complete comic books. Users can create characters, write stories, and let the AI generate the visuals, maintaining character and style consistency throughout.",
+  "requestFramePermissions": []
+}
