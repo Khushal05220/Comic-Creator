@@ -191,7 +191,7 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({ project, upd
                 <h3 className="font-heading text-4xl">Comic Pages</h3>
                 <div className="flex items-center gap-2 p-1 bg-[var(--background)] rounded-lg border border-[var(--border)]">
                     <ViewModeButton mode="list">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
+                      <svg xmlns="http://www.w.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" /></svg>
                     </ViewModeButton>
                     <ViewModeButton mode="grid">
                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
@@ -225,11 +225,6 @@ export const ProjectWorkspace: React.FC<ProjectWorkspaceProps> = ({ project, upd
                                 {page.panels.map((panel, index) => (
                                     <div key={panel.id} className={`relative bg-[var(--surface-2)] rounded-sm flex items-center justify-center overflow-hidden ${getPanelGridClass(page.layout, index)}`}>
                                         <ProjectImage imageKey={panel.image} alt={panel.description} className="w-full h-full object-cover" />
-                                        {panel.dialogue && (
-                                        <div className="absolute bottom-1 left-1 right-1 bg-black/60 text-white text-[10px] p-1 rounded shadow-lg backdrop-blur-sm border border-white/20">
-                                            {panel.dialogue}
-                                        </div>
-                                        )}
                                     </div>
                                 ))}
                             </div>

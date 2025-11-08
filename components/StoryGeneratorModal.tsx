@@ -1,12 +1,13 @@
 
 
 import React, { useState } from 'react';
-import { Project, ComicPage, Panel, PageLayout, Character } from '../types';
+import { Project, ComicPage, Panel, PageLayout, Character, StoryPageGenData, StoryPanelGenData } from '../types';
 import * as geminiService from '../services/geminiService';
 import { Spinner } from './common/Spinner';
 import { MagicIcon } from './common/Icons';
 import { saveImage, getImage } from '../services/dbService';
 import { ProjectImage } from './ProjectImage';
+import { layoutToGridClasses, getPanelGridClass } from '../services/layoutUtils';
 
 interface StoryGeneratorModalProps {
   project: Project;
@@ -14,106 +15,112 @@ interface StoryGeneratorModalProps {
   onCancel: () => void;
 }
 
-const layouts: { id: PageLayout, name: string, panelCount: number }[] = [
-  { id: '1x1', name: '1 Panel / Page', panelCount: 1 },
-  { id: '2x1', name: '2 Panels / Page', panelCount: 2 },
-  { id: '3x1', name: '3 Panels / Page', panelCount: 3 },
-  { id: '2x2', name: '4 Panels / Page', panelCount: 4 },
-];
-
 type GenerationStep = 'INPUT' | 'GENERATING' | 'REVIEW' | 'ERROR';
 
 interface GeneratedPanel extends Panel {
   status: 'pending' | 'generating' | 'done' | 'error';
-  is_new_scene: boolean;
+}
+
+interface GeneratedPage {
+    layout: PageLayout;
+    panels: GeneratedPanel[];
 }
 
 export const StoryGeneratorModal: React.FC<StoryGeneratorModalProps> = ({ project, onSave, onCancel }) => {
   const [step, setStep] = useState<GenerationStep>('INPUT');
   const [story, setStory] = useState('');
-  const [selectedCharIds, setSelectedCharIds] = useState<string[]>([]);
-  const [layout, setLayout] = useState<PageLayout>('2x2');
   const [progressMessage, setProgressMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const [generatedPanels, setGeneratedPanels] = useState<GeneratedPanel[]>([]);
+  const [generatedPages, setGeneratedPages] = useState<GeneratedPage[]>([]);
 
-  const handleCharToggle = (id: string) => {
-    setSelectedCharIds(prev => prev.includes(id) ? prev.filter(cid => cid !== id) : [...prev, id]);
-  };
-  
   const handleGenerate = async () => {
-    if (!story.trim() || selectedCharIds.length === 0) {
-      setErrorMessage("Please provide a story and select at least one character.");
+    if (!story.trim()) {
+      setErrorMessage("Please provide a story script.");
       return;
     }
     setStep('GENERATING');
     setErrorMessage('');
     
     try {
-      setProgressMessage('Analyzing story and creating storyboard...');
-      const selectedChars = project.characters.filter(c => selectedCharIds.includes(c.id));
-      const panelDescriptions = await geminiService.generateStoryboardFromStory(story, selectedChars, project.style);
+      setProgressMessage('Directing the story... (this may take a moment)');
+      const storyboardPages = await geminiService.generateStoryboardFromStory(story, project.characters, project.style);
       
-      if (!panelDescriptions || panelDescriptions.length === 0) {
-          throw new Error("The AI could not generate any panels from the story. Try to be more descriptive.");
+      if (!storyboardPages || storyboardPages.length === 0) {
+          throw new Error("The AI director couldn't create a storyboard. Try to be more descriptive in your story.");
       }
 
-      const initialPanels: GeneratedPanel[] = panelDescriptions.map((desc, i) => ({
-        id: `genpanel_${Date.now()}_${i}`,
-        description: desc.scene_description,
-        dialogue: desc.dialogue,
-        characterIds: project.characters.filter(c => desc.characters_present.includes(c.name)).map(c => c.id),
-        image: null,
-        status: 'pending',
-        is_new_scene: desc.is_new_scene,
+      const initialPages: GeneratedPage[] = storyboardPages.map(pageData => ({
+        layout: pageData.layout,
+        panels: pageData.panels.map((panelData, i) => ({
+            id: `genpanel_${Date.now()}_${i}`,
+            description: panelData.scene_description,
+            dialogue: panelData.dialogue,
+            characterIds: project.characters.filter(c => panelData.characters_present.includes(c.name)).map(c => c.id),
+            image: null,
+            status: 'pending',
+        }))
       }));
-      setGeneratedPanels(initialPanels);
+      setGeneratedPages(initialPages);
 
-      let previousPanelImage: { base64: string; mimeType: string } | null = null;
+      let totalPanels = initialPages.reduce((sum, page) => sum + page.panels.length, 0);
+      let panelsDone = 0;
 
-      for (let i = 0; i < initialPanels.length; i++) {
-        setProgressMessage(`Generating image for panel ${i + 1} of ${initialPanels.length}...`);
-        setGeneratedPanels(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'generating' } : p));
-        
-        const panelToGenerate = initialPanels[i];
-        const panelCharacters = project.characters.filter(c => panelToGenerate.characterIds.includes(c.id));
-        const characterAssets = await Promise.all(panelCharacters.map(async c => ({...c, image: c.image ? await getImage(c.image): null})));
+      for (let pageIndex = 0; pageIndex < initialPages.length; pageIndex++) {
+        let previousPanelImage: { base64: string; mimeType: string } | null = null;
+        const page = initialPages[pageIndex];
 
-        if (panelToGenerate.is_new_scene) {
-            previousPanelImage = null;
-        }
-        
-        try {
-            const image = await geminiService.generateComicPanel(
-                panelToGenerate.description, 
-                panelToGenerate.dialogue, 
-                characterAssets, 
-                [], // No locations in story generator
-                project.style, 
-                project.promptSettings.panel, 
-                undefined, 
-                previousPanelImage
-            );
+        for (let panelIndex = 0; panelIndex < page.panels.length; panelIndex++) {
+            panelsDone++;
+            setProgressMessage(`Illustrating panel ${panelsDone} of ${totalPanels}...`);
+            setGeneratedPages(prevPages => {
+                const newPages = [...prevPages];
+                newPages[pageIndex].panels[panelIndex].status = 'generating';
+                return newPages;
+            });
+            
+            const panelToGenerate = page.panels[panelIndex];
+            const panelCharacters = project.characters.filter(c => panelToGenerate.characterIds.includes(c.id));
+            const characterAssets = await Promise.all(panelCharacters.map(async c => ({...c, image: c.image ? await getImage(c.image): null})));
+            
+            try {
+                const image = await geminiService.generateComicPanel(
+                    panelToGenerate.description, 
+                    panelToGenerate.dialogue, 
+                    characterAssets, 
+                    [], // No specific locations for now, AI infers from story
+                    project.style, 
+                    project.promptSettings.panel, 
+                    undefined, 
+                    previousPanelImage
+                );
 
-            if (image) {
-                previousPanelImage = image;
-                const imageKey = await saveImage(image);
-                setGeneratedPanels(prev => prev.map((p, idx) => idx === i ? { ...p, image: imageKey, status: 'done' } : p));
-            } else {
-                throw new Error("Image generation returned null");
+                if (image) {
+                    previousPanelImage = image;
+                    const imageKey = await saveImage(image);
+                    setGeneratedPages(prev => {
+                        const newPages = [...prev];
+                        newPages[pageIndex].panels[panelIndex].image = imageKey;
+                        newPages[pageIndex].panels[panelIndex].status = 'done';
+                        return newPages;
+                    });
+                } else {
+                    throw new Error("Image generation returned null");
+                }
+            } catch (panelError) {
+                console.error(`Error generating panel:`, panelError);
+                setGeneratedPages(prev => {
+                    const newPages = [...prev];
+                    newPages[pageIndex].panels[panelIndex].status = 'error';
+                    return newPages;
+                });
+                previousPanelImage = null; // Reset context if a panel fails
             }
-        } catch (panelError) {
-             console.error(`Error generating panel ${i+1}:`, panelError);
-             setGeneratedPanels(prev => prev.map((p, idx) => idx === i ? { ...p, status: 'error' } : p));
-             previousPanelImage = null;
-        }
-        
-        // Add a delay to avoid hitting API rate limits, but not for the last item.
-        if (i < initialPanels.length - 1) {
-            await new Promise(resolve => setTimeout(resolve, 1500)); // 1.5 second delay
+            
+            // Add a delay to avoid hitting API rate limits
+            await new Promise(resolve => setTimeout(resolve, 1500));
         }
       }
-      setProgressMessage('All panels generated!');
+      setProgressMessage('All pages generated!');
       setStep('REVIEW');
 
     } catch (e: any) {
@@ -121,7 +128,7 @@ export const StoryGeneratorModal: React.FC<StoryGeneratorModalProps> = ({ projec
       let friendlyMessage = e.message || "An unexpected error occurred.";
       const errorString = friendlyMessage.toLowerCase();
       if (errorString.includes('429') || errorString.includes('quota') || errorString.includes('rate limit')) {
-          friendlyMessage = "You've exceeded the API rate limit. Please wait a moment and try again, or try a shorter story. For more details, check your Google AI Studio plan and billing.";
+          friendlyMessage = "You've exceeded the API rate limit. Please wait a moment and try again, or try a shorter story.";
       }
       setErrorMessage(friendlyMessage);
       setStep('ERROR');
@@ -129,65 +136,42 @@ export const StoryGeneratorModal: React.FC<StoryGeneratorModalProps> = ({ projec
   };
 
   const handleSave = () => {
-    const panelCountPerLayout = layouts.find(l => l.id === layout)!.panelCount;
-    const finalPanels = generatedPanels.filter(p => p.status === 'done' && p.image);
-    
-    if (finalPanels.length === 0) {
-        onCancel();
-        return;
-    }
+    const pages: ComicPage[] = generatedPages.map((genPage, index) => {
+        const finalPanels = genPage.panels
+            .filter(p => p.status === 'done' && p.image)
+            .map(({ status, ...p }) => p as Panel);
 
-    const pages: ComicPage[] = [];
-    for (let i = 0; i < finalPanels.length; i += panelCountPerLayout) {
-        const pagePanels = finalPanels.slice(i, i + panelCountPerLayout).map(({status, is_new_scene, ...p}) => p);
-        if (pagePanels.length > 0) {
-            pages.push({
-                id: `genpage_${Date.now()}_${pages.length}`,
-                pageNumber: 0,
-                layout: layout,
-                panels: pagePanels
-            });
-        }
-    }
+        return {
+            id: `genpage_${Date.now()}_${index}`,
+            pageNumber: 0, // Will be re-numbered in ProjectWorkspace
+            layout: genPage.layout,
+            panels: finalPanels
+        };
+    }).filter(page => page.panels.length > 0);
+    
     onSave(pages);
   };
   
   const renderInput = () => (
     <div className="space-y-6">
       <h2 className="font-heading text-4xl text-[var(--text-main)]">Generate Comic from Story</h2>
+      <p className="text-[var(--text-muted)] -mt-4">The AI will read your story, create page layouts, and generate all the panels for you.</p>
       <div>
         <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Story Script</label>
         <textarea
           value={story}
           onChange={(e) => setStory(e.target.value)}
           placeholder="e.g., Captain Nova patrols the city at night. Suddenly, a distress signal appears. He swoops down to investigate an alley..."
-          rows={8}
+          rows={12}
           className="input-base"
         />
+        <p className="text-xs text-[var(--text-muted)] mt-2">Make sure to use the names of your created characters (e.g., "{project.characters[0]?.name || 'Your Character'}") in the script so the AI can recognize them.</p>
       </div>
-      <div>
-        <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Characters in this Story</label>
-        <div className="flex flex-wrap gap-2 p-2 bg-[var(--background)] rounded-md max-h-48 overflow-y-auto border border-[var(--border)]">
-            {project.characters.map(char => (
-                <button key={char.id} onClick={() => handleCharToggle(char.id)} className={`p-1 rounded-md border-2 transition-all ${selectedCharIds.includes(char.id) ? 'border-[var(--primary)]' : 'border-transparent bg-[var(--surface-1)] hover:border-[var(--border-hover)]'}`}>
-                    <div className="w-16 h-16 rounded bg-[var(--surface-2)]">
-                       <ProjectImage imageKey={char.image} alt={char.name} className="w-16 h-16 object-contain rounded"/>
-                    </div>
-                    <p className="text-xs mt-1 text-[var(--text-main)]">{char.name}</p>
-                </button>
-            ))}
-        </div>
-      </div>
-      <div>
-        <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Page Layout</label>
-        <select value={layout} onChange={(e) => setLayout(e.target.value as PageLayout)} className="input-base">
-          {layouts.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
-        </select>
-      </div>
+     
       {errorMessage && <p className="text-red-500 text-center">{errorMessage}</p>}
       <div className="mt-8 flex justify-end gap-4">
         <button onClick={onCancel} className="btn btn-secondary">Cancel</button>
-        <button onClick={handleGenerate} className="btn btn-primary">
+        <button onClick={handleGenerate} disabled={!story.trim()} className="btn btn-primary">
           <MagicIcon className="w-5 h-5" /> Generate
         </button>
       </div>
@@ -201,17 +185,16 @@ export const StoryGeneratorModal: React.FC<StoryGeneratorModalProps> = ({ projec
             <Spinner />
             <p className="text-lg font-semibold text-[var(--text-muted)]">{progressMessage}</p>
         </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {generatedPanels.map(panel => (
-                <div key={panel.id} className="relative aspect-square bg-[var(--surface-2)] rounded-md flex items-center justify-center overflow-hidden border border-[var(--border)]">
-                    {panel.status === 'generating' && <Spinner />}
-                    {panel.status === 'done' && <ProjectImage imageKey={panel.image} alt={panel.description} className="w-full h-full object-cover rounded"/>}
-                    {panel.status === 'error' && <div className="text-center text-red-500 p-2"><p className="font-bold">Error</p><p className="text-xs">Failed to generate</p></div>}
-                    {panel.dialogue && panel.status === 'done' && (
-                        <div className="absolute bottom-1 left-1 right-1 bg-black/60 text-white text-[10px] p-1 rounded shadow-lg backdrop-blur-sm border border-white/20">
-                            {panel.dialogue}
+        <div className="space-y-4">
+            {generatedPages.map((page, pageIndex) => (
+                 <div key={pageIndex} className="grid gap-2 p-2 bg-[var(--background)] rounded-lg" style={{gridTemplateColumns: `repeat(${Math.ceil(page.panels.length/2)}, 1fr)`}}>
+                    {page.panels.map(panel => (
+                        <div key={panel.id} className="relative aspect-square bg-[var(--surface-2)] rounded-md flex items-center justify-center overflow-hidden border border-[var(--border)]">
+                            {panel.status === 'generating' && <Spinner />}
+                            {panel.status === 'done' && <ProjectImage imageKey={panel.image} alt={panel.description} className="w-full h-full object-cover rounded"/>}
+                            {panel.status === 'error' && <div className="text-center text-red-500 p-2"><p className="font-bold">Error</p><p className="text-xs">Failed</p></div>}
                         </div>
-                    )}
+                    ))}
                 </div>
             ))}
         </div>
@@ -221,22 +204,22 @@ export const StoryGeneratorModal: React.FC<StoryGeneratorModalProps> = ({ projec
   const renderReview = () => (
     <div className="p-2 max-h-[80vh] overflow-y-auto">
         <h2 className="font-heading text-4xl text-[var(--text-main)] mb-4">Review Your Comic</h2>
-        <p className="text-[var(--text-muted)] mb-6">Review the generated pages. You can add them to your project or discard them. Panels that failed to generate will be skipped.</p>
-         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {generatedPanels.map(panel => (
-                <div key={panel.id} className="relative aspect-square bg-[var(--surface-2)] rounded-md flex items-center justify-center overflow-hidden border border-[var(--border)]">
-                    {panel.status === 'done' && panel.image ? (
-                        <>
-                            <ProjectImage imageKey={panel.image} alt={panel.description} className="w-full h-full object-cover rounded"/>
-                            {panel.dialogue && (
-                                <div className="absolute bottom-1 left-1 right-1 bg-black/60 text-white text-[10px] p-1 rounded shadow-lg backdrop-blur-sm border border-white/20">
-                                    {panel.dialogue}
-                                </div>
-                            )}
-                        </>
-                    ) : (
-                         <div className="text-center text-gray-500 p-2"><p className="font-bold">Skipped</p><p className="text-xs">Panel failed to generate</p></div>
-                    )}
+        <p className="text-[var(--text-muted)] mb-6">Review the generated pages. Panels that failed to generate will be skipped. You can add the successful pages to your project.</p>
+         <div className="space-y-8">
+            {generatedPages.map((page, pageIndex) => (
+                <div key={pageIndex} className="bg-[var(--background)] p-2 rounded-lg border border-[var(--border)]">
+                    <h3 className="font-bold text-center mb-2 text-sm text-[var(--text-muted)]">Page {pageIndex + 1} (Layout: {page.layout})</h3>
+                    <div className={`grid ${layoutToGridClasses[page.layout]} gap-1`}>
+                        {page.panels.map(panel => (
+                            <div key={panel.id} className={`relative aspect-square bg-[var(--surface-2)] rounded-sm flex items-center justify-center overflow-hidden ${getPanelGridClass(page.layout, page.panels.indexOf(panel))}`}>
+                                {panel.status === 'done' && panel.image ? (
+                                    <ProjectImage imageKey={panel.image} alt={panel.description} className="w-full h-full object-cover"/>
+                                ) : (
+                                    <div className="text-center text-gray-500 p-1"><p className="font-bold text-xs">Skipped</p></div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
                 </div>
             ))}
         </div>

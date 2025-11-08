@@ -1,7 +1,8 @@
 
 
 import { GoogleGenAI, Modality, Type } from "@google/genai";
-import { Character, AssetType, ImageData, Location } from "../types";
+import { Character, AssetType, ImageData, Location, StoryPageGenData, PageLayout } from "../types";
+import { DEFAULT_STORY_GENERATOR_PROMPT } from "../constants";
 
 const API_KEY = process.env.API_KEY;
 if (!API_KEY) {
@@ -81,8 +82,7 @@ export const generateComicPanel = async (
   advancedPrompt?: string,
   previousPanelImage?: ImageData | null,
   cameraAngle?: string,
-  lighting?: string,
-  characterExpressions?: { character: Character; expression: string }[]
+  lighting?: string
 ): Promise<ImageData | null> => {
   
   const characterReferencesSection = characters.length > 0
@@ -97,13 +97,8 @@ export const generateComicPanel = async (
     ? "This panel is a direct continuation of the scene from the final reference image (the previous panel). CRITICALLY IMPORTANT: Maintain consistency with the previous panel's background, lighting, and character poses/positions. The 'Core Action/Change' description below specifies ONLY what is different in this new panel."
     : "This panel starts a new scene. Establish the environment and characters based on the scene description.";
   
-  const expressionsPrompt = characterExpressions && characterExpressions.length > 0
-    ? characterExpressions.map(ce => `${ce.character.name} has a ${ce.expression.toLowerCase()} expression.`).join(' ')
-    : 'Not specified.';
-
   const prompt = promptTemplate
     .replace('{{style}}', style)
-    .replace('{{style_enhancers}}', styleEnhancers[style] || 'high quality, detailed')
     .replace('{{character_references_section}}', characterReferencesSection)
     .replace('{{location_references_section}}', locationReferencesSection)
     .replace('{{scene_context}}', sceneContextPrompt)
@@ -111,7 +106,6 @@ export const generateComicPanel = async (
     .replace('{{lighting}}', lighting || 'Standard, neutral lighting.')
     .replace('{{advanced_prompt}}', advancedPrompt || 'None.')
     .replace('{{scene_description}}', sceneDescription)
-    .replace('{{character_expressions}}', expressionsPrompt)
     .replace('{{dialogue}}', dialogue);
 
   const characterImageParts = characters
@@ -177,32 +171,14 @@ export const analyzeImage = async (base64Image: string, mimeType: string, prompt
   return response.text;
 };
 
-export interface StoryPanelData {
-  scene_description: string;
-  dialogue: string;
-  characters_present: string[];
-  is_new_scene: boolean;
-}
-
-export const generateStoryboardFromStory = async (story: string, characters: Character[], style: string): Promise<StoryPanelData[]> => {
+export const generateStoryboardFromStory = async (story: string, characters: Character[], style: string): Promise<StoryPageGenData[]> => {
   const characterList = characters.map(c => c.name).join(', ');
-  const prompt = `You are a storyboard artist for a "${style}" style comic book.
-Your task is to break down the following story script into a sequence of distinct comic book panels.
-For each panel, provide a concise visual scene description, any dialogue, and a list of characters present.
-Crucially, you must determine if a panel begins a NEW scene. A new scene is defined by a significant change in location or time.
-The very first panel is always a new scene.
-
-Set 'is_new_scene' to true if the location/time changes, otherwise set it to false.
-
-The list of available character names is: [${characterList}]. Only use names from this list in the 'characters_present' field.
-If no characters are present, return an empty array for 'characters_present'.
-If there is no dialogue, return an empty string.
-
-Story Script:
----
-${story}
----
-`;
+  const characterNameExample = characters.length > 0 ? characters[0].name : 'the main character';
+  const prompt = DEFAULT_STORY_GENERATOR_PROMPT
+    .replace('{{user_story_text}}', story)
+    .replace('{{style}}', style)
+    .replace('{{character_list}}', characterList)
+    .replace('{{character_name_example}}', characterNameExample);
 
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-pro',
@@ -211,31 +187,40 @@ ${story}
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.ARRAY,
-        description: "A list of comic book panels.",
+        description: "A list of comic book pages.",
         items: {
           type: Type.OBJECT,
           properties: {
-            scene_description: {
+            layout: {
               type: Type.STRING,
-              description: "A visual description of the scene in the panel."
+              description: "The suggested layout for this page.",
+              enum: ['1x1', '1x2', '2x1', '2x2', '3x1', 'dominant-top', 'dominant-left', 'timeline-vert', 'four-varied']
             },
-            dialogue: {
-              type: Type.STRING,
-              description: "The dialogue or caption text for the panel. Empty if none."
-            },
-            characters_present: {
+            panels: {
               type: Type.ARRAY,
-              description: "An array of character names present in the panel.",
+              description: "A list of panels on this page.",
               items: {
-                type: Type.STRING
+                type: Type.OBJECT,
+                properties: {
+                  scene_description: {
+                    type: Type.STRING,
+                    description: "A visual description of the scene in the panel."
+                  },
+                  dialogue: {
+                    type: Type.STRING,
+                    description: "The dialogue or caption text for the panel. Empty if none."
+                  },
+                  characters_present: {
+                    type: Type.ARRAY,
+                    description: "An array of character names present in the panel.",
+                    items: { type: Type.STRING }
+                  }
+                },
+                required: ['scene_description', 'dialogue', 'characters_present']
               }
-            },
-            is_new_scene: {
-              type: Type.BOOLEAN,
-              description: "True if this panel starts a new scene (change in location or time)."
             }
           },
-          required: ['scene_description', 'dialogue', 'characters_present', 'is_new_scene']
+          required: ['layout', 'panels']
         }
       }
     }
@@ -246,7 +231,7 @@ ${story}
     // Gemini can sometimes wrap the JSON in ```json ... ```
     const sanitizedJsonText = jsonText.replace(/^```json\n/, '').replace(/\n```$/, '');
     const parsed = JSON.parse(sanitizedJsonText);
-    return parsed as StoryPanelData[];
+    return parsed as StoryPageGenData[];
   } catch (e) {
     console.error("Failed to parse storyboard JSON:", response.text);
     throw new Error("The AI failed to generate a valid storyboard structure. Please try rephrasing your story.");

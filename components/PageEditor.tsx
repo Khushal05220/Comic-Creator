@@ -58,7 +58,6 @@ export const PageEditor: React.FC<PageEditorProps> = ({ project, pageToEdit, onS
       showAdvanced: false,
       cameraAngle: '',
       lighting: '',
-      characterExpressions: [],
     });
 
     if (pageToEdit && pageToEdit.layout === layout) {
@@ -90,10 +89,6 @@ export const PageEditor: React.FC<PageEditorProps> = ({ project, pageToEdit, onS
       ? panel.characterIds.filter(id => id !== charId)
       : [...panel.characterIds, charId];
     updatePanel(panelIndex, 'characterIds', newCharIds);
-    if (!newCharIds.includes(charId)) {
-        const newExpressions = panel.characterExpressions?.filter(ce => ce.characterId !== charId);
-        updatePanel(panelIndex, 'characterExpressions', newExpressions);
-    }
   };
   
   const handleLocationToggle = (panelIndex: number, locId: string) => {
@@ -105,25 +100,6 @@ export const PageEditor: React.FC<PageEditorProps> = ({ project, pageToEdit, onS
   };
 
 
-  const handleExpressionChange = (panelIndex: number, charId: string, expression: string) => {
-      const panel = panels[panelIndex];
-      let expressions = panel.characterExpressions ? [...panel.characterExpressions] : [];
-      const existingIndex = expressions.findIndex(ce => ce.characterId === charId);
-
-      if (expression === '') {
-          if (existingIndex > -1) {
-              expressions.splice(existingIndex, 1);
-          }
-      } else {
-          if (existingIndex > -1) {
-              expressions[existingIndex].expression = expression;
-          } else {
-              expressions.push({ characterId: charId, expression });
-          }
-      }
-      updatePanel(panelIndex, 'characterExpressions', expressions);
-  };
-  
   const handleGeneratePanel = async (panelIndex: number) => {
     const panel = panels[panelIndex];
     if (!panel.description) {
@@ -136,13 +112,6 @@ export const PageEditor: React.FC<PageEditorProps> = ({ project, pageToEdit, onS
     try {
       const prevPanelImageKey = panelIndex > 0 ? panels[panelIndex - 1].image : null;
       const previousPanelImage = prevPanelImageKey ? await getImage(prevPanelImageKey) : null;
-      
-      const expressionsWithChars = (panel.characterExpressions || [])
-        .map(ce => {
-            const character = project.characters.find(c => c.id === ce.characterId);
-            return character ? { character, expression: ce.expression } : null;
-        })
-        .filter((ce): ce is { character: Character; expression: string } => ce !== null);
       
       const charactersForPanel = project.characters.filter(c => panel.characterIds.includes(c.id));
       const characterAssets = await Promise.all(
@@ -170,8 +139,7 @@ export const PageEditor: React.FC<PageEditorProps> = ({ project, pageToEdit, onS
         panel.advancedPrompt,
         previousPanelImage,
         panel.cameraAngle,
-        panel.lighting,
-        expressionsWithChars
+        panel.lighting
       );
       
       if (image) {
@@ -307,26 +275,6 @@ export const PageEditor: React.FC<PageEditorProps> = ({ project, pageToEdit, onS
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <SelectControl label="Camera Angle" value={panel.cameraAngle || ''} onChange={e => updatePanel(index, 'cameraAngle', e.target.value)} options={CAMERA_ANGLES} />
                                 <SelectControl label="Lighting" value={panel.lighting || ''} onChange={e => updatePanel(index, 'lighting', e.target.value)} options={LIGHTING_STYLES} />
-                            </div>
-                            <div>
-                            <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Character Expressions</label>
-                            <div className="space-y-2 p-2 bg-[var(--background)] rounded-md border border-[var(--border)]">
-                                {panel.characterIds.map(charId => {
-                                    const char = project.characters.find(c => c.id === charId);
-                                    if (!char) return null;
-                                    const currentExpression = panel.characterExpressions?.find(ce => ce.characterId === charId)?.expression || '';
-                                    return (
-                                        <div key={charId} className="flex items-center gap-2">
-                                            <span className="font-semibold w-2/5 text-sm truncate text-[var(--text-main)]" title={char.name}>{char.name}:</span>
-                                            <select value={currentExpression} onChange={e => handleExpressionChange(index, charId, e.target.value)} className="input-base w-3/5 p-1 text-xs">
-                                                <option value="">Default</option>
-                                                {EXPRESSIONS.map(exp => <option key={exp} value={exp}>{exp}</option>)}
-                                            </select>
-                                        </div>
-                                    );
-                                })}
-                                {panel.characterIds.length === 0 && <p className="text-xs text-[var(--text-muted)] p-1">Select characters above to set expressions.</p>}
-                            </div>
                             </div>
                             <div>
                             <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Dialogue / Caption</label>
