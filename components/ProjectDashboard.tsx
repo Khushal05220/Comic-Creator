@@ -82,17 +82,17 @@ const DemoProjectsSection: React.FC = () => {
     { 
       name: 'Heart Break', 
       url: 'https://drive.google.com/uc?export=download&id=1qUlF8XAySgcSm3ijY7udncsYdwHr3FNW',
-      thumbnail: 'https://drive.google.com/uc?export=view&id=1zrh__xQYodyVtZhntYOXZ0KxzfAFiVGO'
+      thumbnail: 'https://lh3.googleusercontent.com/d/1zrh__xQYodyVtZhntYOXZ0KxzfAFiVGO'
     },
     { 
       name: 'Samurai', 
       url: 'https://drive.google.com/uc?export=download&id=1Bkqbx9YSWs3HIEzRjmy08PCiDwYU-sOa',
-      thumbnail: 'https://drive.google.com/uc?export=view&id=1WyON2POUTECIXflOeXsmdT8bJusn24sC'
+      thumbnail: 'https://lh3.googleusercontent.com/d/1WyON2POUTECIXflOeXsmdT8bJusn24sC'
     },
     { 
       name: 'Neel', 
       url: 'https://drive.google.com/uc?export=download&id=1LApD9MoKZvy0wUlEE1miRW4jzRMsAnK7',
-      thumbnail: 'https://drive.google.com/uc?export=view&id=1OzDhgUHQzzHZmuDqzzsbaciMv_wDmlW5'
+      thumbnail: 'https://lh3.googleusercontent.com/d/1OzDhgUHQzzHZmuDqzzsbaciMv_wDmlW5'
     }
   ];
 

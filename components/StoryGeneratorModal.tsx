@@ -29,13 +29,26 @@ interface GeneratedPage {
 export const StoryGeneratorModal: React.FC<StoryGeneratorModalProps> = ({ project, onSave, onCancel }) => {
   const [step, setStep] = useState<GenerationStep>('INPUT');
   const [story, setStory] = useState('');
+  const [selectedCharacterIds, setSelectedCharacterIds] = useState<string[]>([]);
   const [progressMessage, setProgressMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [generatedPages, setGeneratedPages] = useState<GeneratedPage[]>([]);
 
+  const handleCharacterToggle = (charId: string) => {
+    setSelectedCharacterIds(prev =>
+      prev.includes(charId)
+        ? prev.filter(id => id !== charId)
+        : [...prev, charId]
+    );
+  };
+
   const handleGenerate = async () => {
     if (!story.trim()) {
       setErrorMessage("Please provide a story script.");
+      return;
+    }
+     if (selectedCharacterIds.length === 0) {
+      setErrorMessage("Please select at least one character for the story.");
       return;
     }
     setStep('GENERATING');
@@ -43,7 +56,8 @@ export const StoryGeneratorModal: React.FC<StoryGeneratorModalProps> = ({ projec
     
     try {
       setProgressMessage('Directing the story... (this may take a moment)');
-      const storyboardPages = await geminiService.generateStoryboardFromStory(story, project.characters, project.style);
+      const selectedCharacters = project.characters.filter(c => selectedCharacterIds.includes(c.id));
+      const storyboardPages = await geminiService.generateStoryboardFromStory(story, selectedCharacters, project.style);
       
       if (!storyboardPages || storyboardPages.length === 0) {
           throw new Error("The AI director couldn't create a storyboard. Try to be more descriptive in your story.");
@@ -156,13 +170,33 @@ export const StoryGeneratorModal: React.FC<StoryGeneratorModalProps> = ({ projec
     <div className="space-y-6">
       <h2 className="font-heading text-4xl text-[var(--text-main)]">Generate Comic from Story</h2>
       <p className="text-[var(--text-muted)] -mt-4">The AI will read your story, create page layouts, and generate all the panels for you.</p>
+      
       <div>
-        <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">Story Script</label>
+        <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">1. Choose Characters for this Story</label>
+        <div className="flex flex-wrap gap-2 p-2 bg-[var(--background)] rounded-md border border-[var(--border)] min-h-[108px]">
+            {project.characters.map(char => (
+            <button key={char.id} onClick={() => handleCharacterToggle(char.id)} className={`p-1 rounded-md border-2 transition-all ${selectedCharacterIds.includes(char.id) ? 'border-[var(--primary)]' : 'border-transparent hover:border-[var(--border-hover)]'}`}>
+                <div className="w-20 aspect-[3/4] bg-gray-700 rounded">
+                    <ProjectImage imageKey={char.image} alt={char.name} className="w-full h-full object-cover rounded"/>
+                </div>
+                <p className="text-xs mt-1 text-[var(--text-main)] w-20 truncate">{char.name}</p>
+            </button>
+            ))}
+            {project.characters.length === 0 && (
+              <p className="text-xs text-[var(--text-muted)] text-center w-full self-center">
+                You must create at least one character in the "Assets" tab before using this feature.
+              </p>
+            )}
+        </div>
+      </div>
+      
+      <div>
+        <label className="block text-sm font-medium text-[var(--text-muted)] mb-2">2. Story Script</label>
         <textarea
           value={story}
           onChange={(e) => setStory(e.target.value)}
           placeholder="e.g., Captain Nova patrols the city at night. Suddenly, a distress signal appears. He swoops down to investigate an alley..."
-          rows={12}
+          rows={10}
           className="input-base"
         />
         <p className="text-xs text-[var(--text-muted)] mt-2">Make sure to use the names of your created characters (e.g., "{project.characters[0]?.name || 'Your Character'}") in the script so the AI can recognize them.</p>
@@ -171,7 +205,7 @@ export const StoryGeneratorModal: React.FC<StoryGeneratorModalProps> = ({ projec
       {errorMessage && <p className="text-red-500 text-center">{errorMessage}</p>}
       <div className="mt-8 flex justify-end gap-4">
         <button onClick={onCancel} className="btn btn-secondary">Cancel</button>
-        <button onClick={handleGenerate} disabled={!story.trim()} className="btn btn-primary">
+        <button onClick={handleGenerate} disabled={!story.trim() || selectedCharacterIds.length === 0} className="btn btn-primary">
           <MagicIcon className="w-5 h-5" /> Generate
         </button>
       </div>
