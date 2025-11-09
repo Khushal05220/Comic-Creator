@@ -2,6 +2,8 @@
 ### [🌐 Open the App → Click Here](https://comics-creators-532537885078.us-west1.run.app/)
 
 ---
+### [🌐 Video Description → Click Here](https://vimeo.com/1135016887?share=copy&fl=sv&fe=ci)
+
 
 ## 🧠 About the Project  
 **AI Comic Studio** is an AI-powered storytelling tool that lets anyone create **consistent, multi-panel comics** from text.  
