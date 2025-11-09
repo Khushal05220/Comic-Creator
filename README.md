@@ -115,4 +115,10 @@ turning words into worlds, one panel at a time.*
 
 ---
 
+## 📄 License
+
+This project is licensed under the **MIT License** — see the [LICENSE](https://github.com/Khushal05220/Comic-Creator/blob/main/LICENSE) file for details.
+
+© 2025 Kushal Shimpi
+
 
