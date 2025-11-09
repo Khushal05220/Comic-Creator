@@ -7,8 +7,6 @@ import { ProjectWorkspace } from './components/ProjectWorkspace';
 import useLocalStorage from './hooks/useLocalStorage';
 import { MagicIcon } from './components/common/Icons';
 import useTheme, { Theme } from './hooks/useTheme';
-import { initDB, saveImage } from './services/dbService';
-import { getSeedProjects, getSeedImages } from './services/seedData';
 
 const ThemeToggle: React.FC<{ theme: Theme, toggleTheme: () => void }> = ({ theme, toggleTheme }) => {
   const SunIcon = () => (
@@ -53,38 +51,6 @@ const App: React.FC = () => {
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [view, setView] = useState<View>('DASHBOARD');
   const [theme, toggleTheme] = useTheme();
-
-  // Handle seeding data on first load
-  useEffect(() => {
-    const seedDatabase = async () => {
-        await initDB();
-        const seedProjects = getSeedProjects();
-        const seedImages = getSeedImages();
-        
-        const seededProject = { ...seedProjects[0] };
-        
-        // Save images and replace placeholders with keys
-        const zephyrSheetKey = await saveImage(seedImages.zephyrSheet);
-        seededProject.characters[0].image = zephyrSheetKey;
-
-        const zephyrFlyingKey = await saveImage(seedImages.zephyrFlying);
-        seededProject.pages[0].panels[0].image = zephyrFlyingKey;
-
-        const zephyrConcernedKey = await saveImage(seedImages.zephyrConcerned);
-        seededProject.pages[0].panels[1].image = zephyrConcernedKey;
-        
-        const neoVeridiaKey = await saveImage(seedImages.neoVeridia);
-        seededProject.locations[0].image = neoVeridiaKey;
-        
-        setProjects([seededProject]);
-        window.localStorage.setItem('db_seeded', 'true');
-    };
-
-    const isSeeded = window.localStorage.getItem('db_seeded');
-    if (!isSeeded) {
-        seedDatabase();
-    }
-  }, []);
 
   const createNewProject = (title: string, style: string) => {
     const newProject: Project = {
@@ -162,10 +128,10 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--text-main)] font-sans">
+    <div className="min-h-screen bg-[var(--background)] text-[var(--text-main)] font-sans flex flex-col">
       <Header onBackToDashboard={handleBackToDashboard} theme={theme} toggleTheme={toggleTheme}/>
-      <main className="p-4 sm:p-6 md:p-8">
-        <div className="animate-fade-in">
+      <main className="p-4 sm:p-6 md:p-8 flex-1 flex flex-col">
+        <div className="animate-fade-in flex-1 flex flex-col">
           {renderContent()}
         </div>
       </main>
